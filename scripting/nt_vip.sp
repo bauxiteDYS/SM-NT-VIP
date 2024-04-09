@@ -15,7 +15,7 @@ public Plugin myinfo = {
 	name = "VIP",
 	description = "VIP",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.3.9",
+	version = "0.5.0",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -173,7 +173,7 @@ public void OnRoundStartPost(Event event, const char[] name, bool dontBroadcast)
 	ClearVip();
 	ClearTimer();
 	
-	VipCheckTimer = CreateTimer(35.0, CheckForVip, _, TIMER_FLAG_NO_MAPCHANGE);
+	VipCheckTimer = CreateTimer(35.0, CheckForVip, _, TIMER_FLAG_NO_MAPCHANGE); // Players can spawn for about 33s into the round
 }
 
 public Action CheckForVip(Handle timer)
@@ -272,25 +272,22 @@ void SetVip(int theVip)
 
 void MakeVip(int vip)
 {
-	int newWeapon;
-	newWeapon = CreateEntityByName("weapon_mpn");
+	StripPlayerWeapons(vip, true);
+	
+	int newWeapon = GivePlayerItem(vip, "weapon_smac");
+
+	if(newWeapon != -1)
+	{
+		AcceptEntityInput(newWeapon, "use", vip, vip);
+	}
 	
 	char vipModel[] = "models/player/vip.mdl";
 	SetEntityModel(vip, vipModel);
 	DispatchKeyValue(vip, "targetname", g_vipName);
 	
-	float vipVec[3];
-	GetClientAbsOrigin(vip, vipVec);
-	TeleportEntity(newWeapon, vipVec, NULL_VECTOR, NULL_VECTOR);
-	
-	StripPlayerWeapons(vip, true);
-	DispatchSpawn(newWeapon);
-	EquipPlayerWeapon(vip, newWeapon);
-	
-	int ammotype = GetAmmoType(newWeapon);
-	SetWeaponAmmo(vip, ammotype, 100); 	// give ammo, altho for smac dunno
-	
 	SetEntityHealth(vip, 120);
+	
+	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190);
 }
 
 public void OnClientDisconnect_Post(int client)
@@ -398,6 +395,8 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 
 void RewardPlayers(int winTeam)
 {
+	// Rewards need a rework
+	
 	int bonusPoints = 2;
 	int newPoints;
 	
