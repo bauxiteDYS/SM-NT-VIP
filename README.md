@@ -5,7 +5,7 @@ Thanks to DestroyGirl for implementing the game mode and the others for writing 
 
 Also big shoutout to Agiel for the nt_windcond code which basically makes anything possible ontop of the CTG game mode, should be much easier to create alternative game modes now.
 
-Right now if your server uses nt_windcond plugin by Agiel, this plugin will unload it for VIP maps until I can re-write this plugin to work with future versions of nt_wincond that support VIP.
+Right now if your server uses nt_wincond plugin by Agiel, the VIP plugin will unload it for VIP maps until I can re-write this plugin to work with future versions of nt_wincond that support VIP.
 There are various implementations of VIP so this plugin might break some of those as well until the gamemode is completed.
 
 All you need to do to create a VIP map with this plugin is:  
