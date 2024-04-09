@@ -1,5 +1,5 @@
 # SM-NT-VIP
-Sourcemod plugin for NT VIP mode - Credits to DestroyGirl, Agiel, Rain and SoftAsHell
+Sourcemod plugin for NT VIP mode (WIP) - Credits to DestroyGirl, Agiel, Rain and SoftAsHell
 
 Thanks to DestroyGirl for implementing the game mode and the others for writing much of the code that I was simply able to copy, and for helping me with questions.
 
