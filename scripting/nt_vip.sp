@@ -12,8 +12,8 @@
 #define BOTH_TEAMS 5
 
 public Plugin myinfo = {
-	name = "VIP",
-	description = "VIP",
+	name = "NT VIP mode",
+	description = "Enabled VIP game mode mode for VIP maps, smac plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
 	version = "0.5.0",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
@@ -84,7 +84,6 @@ public void OnMapInit()
 	{
 		SetFailState("Not a vip map");
 	}
-	
 }
 
 void CreateDetour() 
