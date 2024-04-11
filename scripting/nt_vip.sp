@@ -15,7 +15,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, smac plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.1",
+	version = "0.5.3",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -209,6 +209,7 @@ void ClearVip()
 		if(IsClientInGame(g_vipPlayer))
 		{
 			DispatchKeyValue(g_vipPlayer, "targetname", "RndPlyr");
+			SDKUnhook(g_vipPlayer, SDKHook_WeaponDrop, OnWeaponDrop)
 		}
 	}
 	
@@ -284,7 +285,7 @@ void MakeVip(int vip)
 {
 	StripPlayerWeapons(vip, false); // No VIP animations for knife
 	
-	int newWeapon = GivePlayerItem(vip, "weapon_smac"); // Other classes have no SMAC animation so maybe make VIP unable to drop it
+	int newWeapon = GivePlayerItem(vip, "weapon_smac"); 
 
 	if(newWeapon != -1)
 	{
@@ -297,7 +298,17 @@ void MakeVip(int vip)
 	
 	SetEntityHealth(vip, 120);
 	
-	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190);
+	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190); 
+	
+	SDKHook(vip, SDKHook_WeaponDrop, OnWeaponDrop);
+}
+
+public Action OnWeaponDrop(int client, int weapon)
+{
+	// Other classes have no SMAC animation so make VIP unable to drop it
+	// Not sure if I need to unhook if they leave
+	
+	return Plugin_Handled;
 }
 
 public void OnClientDisconnect_Post(int client)
