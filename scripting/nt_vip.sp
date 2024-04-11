@@ -15,7 +15,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, smac plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.0",
+	version = "0.5.1",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -139,10 +139,19 @@ void CheckingForWin()
 		}
 	}
 	
+	if(aliveNsf == 0 && aliveJinrai == 0)
+	{
+		PrintToChatAll("Somehow both teams died at the same time");
+		EndRoundAndShowWinner(BOTH_TEAMS);
+		
+		return;
+	}
+	
 	if (aliveNsf == 0)
 	{
 		PrintToChatAll("Win by elimination");
 		EndRoundAndShowWinner(TEAM_JINRAI);
+		
 		return;
 	}
 	
@@ -150,6 +159,7 @@ void CheckingForWin()
 	{
 		PrintToChatAll("Win by elimination");
 		EndRoundAndShowWinner(TEAM_NSF);
+		
 		return;
 	}
 	
@@ -159,6 +169,7 @@ void CheckingForWin()
 	{
 		PrintToChatAll("Tie");
 		EndRoundAndShowWinner(BOTH_TEAMS);
+		
 		return;
 	}
 }
@@ -271,9 +282,9 @@ void SetVip(int theVip)
 
 void MakeVip(int vip)
 {
-	StripPlayerWeapons(vip, true);
+	StripPlayerWeapons(vip, false); // No VIP animations for knife
 	
-	int newWeapon = GivePlayerItem(vip, "weapon_smac");
+	int newWeapon = GivePlayerItem(vip, "weapon_smac"); // Other classes have no SMAC animation so maybe make VIP unable to drop it
 
 	if(newWeapon != -1)
 	{
@@ -282,7 +293,7 @@ void MakeVip(int vip)
 	
 	char vipModel[] = "models/player/vip.mdl";
 	SetEntityModel(vip, vipModel);
-	DispatchKeyValue(vip, "targetname", g_vipName);
+	DispatchKeyValue(vip, "targetname", g_vipName); // Same as "m_iName" but can't set that directly first otherwise server crash
 	
 	SetEntityHealth(vip, 120);
 	
