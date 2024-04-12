@@ -13,9 +13,9 @@
 
 public Plugin myinfo = {
 	name = "NT VIP mode",
-	description = "Enabled VIP game mode mode for VIP maps, smac plugin required",
+	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.3",
+	version = "0.5.5",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -252,6 +252,14 @@ void CheckClassAndSetVip(int client)
 
 void SetVip(int theVip)
 {
+	int GameState = GameRules_GetProp("m_iGameState");
+	
+	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
+	{
+		PrintToChatAll("Can't set VIP - round is already over or hasn't started yet");
+		return;
+	}
+	
 	if(theVip <= 0)
 	{
 		g_checkPassed = false;
@@ -277,6 +285,7 @@ void SetVip(int theVip)
 	g_opsTeam = GetOpposingTeam(g_vipTeam);
 	
 	PrintToChatAll("VIP Team: %s, VIP player: %N", g_vipTeam == TEAM_NSF ? "NSF" : "Jinrai", theVip);
+	PrintToConsoleAll("VIP Team: %s, VIP player: %N", g_vipTeam == TEAM_NSF ? "NSF" : "Jinrai", theVip);
 	
 	MakeVip(theVip);
 }
@@ -298,7 +307,7 @@ void MakeVip(int vip)
 	
 	SetEntityHealth(vip, 120);
 	
-	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190); 
+	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190);
 	
 	SDKHook(vip, SDKHook_WeaponDrop, OnWeaponDrop);
 }
@@ -306,7 +315,10 @@ void MakeVip(int vip)
 public Action OnWeaponDrop(int client, int weapon)
 {
 	// Other classes have no SMAC animation so make VIP unable to drop it
-	// Not sure if I need to unhook if they leave
+	// Also VIP has no other weapons and are meant to use the SMAC
+	// So not going to allow them to drop it for now
+	// It's unhooked automatically if they leave server
+	// Should use SMAC plugin to disallow other classes from picking it up after VIP death
 	
 	return Plugin_Handled;
 }
@@ -379,7 +391,7 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	
 	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
 	{
-		PrintToChatAll("round is already over or hasn't started yet?");
+		PrintToChatAll("Can't end round - it's already over or hasn't started yet");
 		return;
 	}
 	
