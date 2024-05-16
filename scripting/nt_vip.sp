@@ -3,7 +3,6 @@
 #include <sdkhooks>
 #include <dhooks>
 #include <neotokyo>
-#include <nt_competitive/nt_competitive_natives>
 
 #define GAMEHUD_TIE 3
 #define GAMEHUD_JINRAI 4
@@ -15,7 +14,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.5",
+	version = "0.5.6",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
