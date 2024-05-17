@@ -1,3 +1,8 @@
+# Note
+Currently a bug is occuring where the server will not change level at the intended time, instead spamming chat with changelevel messages as described in issue #3  
+For whatever reasons, doesn't seem to be problematic on some server configs, although I can't figure out what, the bug is probably something to do with the VIP plugins and/or how it affects other plugins
+Would not recommend using the plugin until it is fixed
+  
 # SM-NT-VIP
 Sourcemod plugin for NT VIP mode (WIP) - Credits to DestroyGirl, Agiel, Rain and SoftAsHell
 
