@@ -14,11 +14,13 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.7",
+	version = "0.5.9",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
 static char g_vipName[] = "vip_player";
+
+DynamicDetour ddWin;
 
 Handle VipCheckTimer;
 
@@ -27,6 +29,8 @@ int g_vipTeam = -1;
 int g_opsTeam = -1;
 int g_vipKiller = -1;
 
+bool g_lateLoad;
+bool g_vipMap;
 bool g_vipEscaped;
 bool g_checkPassed;
 
@@ -60,63 +64,129 @@ bool IsPlayerDead(int client) // Agiel: None of the normal ways seemed to handle
     return isAlive == 0;
 }
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	g_lateLoad = late;
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
-	CreateDetour();
-	
-	HookEvent("player_death", Event_PlayerDeathPre, EventHookMode_Pre);
-	HookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post);
-	HookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post);
+	if(g_lateLoad)
+	{
+		OnMapInit();
+		PrintToServer("Late plugin load");
+	}
 }
 
 public void OnMapInit()
 {	
+	bool deathHook;
+	bool roundHook;
+	bool spawnHook;
+	
 	char mapName[32];
 	GetCurrentMap(mapName, sizeof(mapName));
 	
 	if(StrContains(mapName, "_vip", false) != -1)
 	{
-		ServerCommand("sm plugins unload nt_wincond"); 
+		g_vipMap = true;
+		
 		PrintToServer("%s is a vip map, unloading wincond plugin for now", mapName);
+		
+		ServerCommand("sm plugins unload nt_wincond"); 
+		
+		if(HookEventEx("player_death", Event_PlayerDeathPre, EventHookMode_Pre))
+		{
+			deathHook = true;
+		}
+		
+		if(HookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post))
+		{
+			roundHook = true;
+		}
+		
+		if(HookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post))
+		{
+			spawnHook = true;
+		}
+		
+		
+		CreateDetour();
 	}
 	else
 	{
-		SetFailState("Not a vip map");
+		g_vipMap = false;
+		
+		PrintToServer("%s is not a vip map, plugin should not operate", mapName);
+		
+		if(deathHook && roundHook && spawnHook)
+		{
+			UnhookEvent("player_death", Event_PlayerDeathPre, EventHookMode_Pre);
+			UnhookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post);
+			UnhookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post);
+		}
+		
+		DisableDetour();
+				
 	}
+}
+
+void DisableDetour() 
+{
+	if(!IsValidHandle(ddWin))
+	{
+		return;
+	}
+	
+	if(!ddWin.Disable(Hook_Pre, CheckWinCondition))	
+	{
+		PrintToServer("Couldn't disable detour");
+		return;
+	}
+
+	delete ddWin;
+
+	PrintToServer("Disabled detour");
 }
 
 void CreateDetour() 
 {
-    Handle gd = LoadGameConfigFile("neotokyo/wincond");
-	
-    if (gd == INVALID_HANDLE) 
+	Handle gd = LoadGameConfigFile("neotokyo/wincond");
+
+	if (gd == INVALID_HANDLE) 
 	{
-        SetFailState("Failed to load GameData");
-    }
+		SetFailState("Failed to load GameData");
+	}
+
+	ddWin = DynamicDetour.FromConf(gd, "Fn_CheckWinCondition");
 	
-    DynamicDetour dd = DynamicDetour.FromConf(gd, "Fn_CheckWinCondition");
-	
-    if (!dd) 
+	if(!ddWin) 
 	{
-        SetFailState("Failed to create dynamic detour");
-    }
+		SetFailState("Failed to create dynamic detour");
+	}
 	
-    if (!dd.Enable(Hook_Pre, CheckWinCondition))	
+	if(!ddWin.Enable(Hook_Pre, CheckWinCondition))	
 	{
-        SetFailState("Failed to detour");
-    }
-	
-    delete dd;
-    CloseHandle(gd);
+		SetFailState("Failed to detour");
+	}
+
+	CloseHandle(gd);
+
+	PrintToServer("Enabled detour");
 }
 
 MRESReturn CheckWinCondition(Address pThis, DHookReturn hReturn)
 {
-	CheckingForWin();
-	return MRES_Supercede;
+	if(CheckingForWin())
+	{
+		return MRES_Supercede;
+	}
+	
+	return MRES_Handled;
 }
 
-void CheckingForWin() 
+bool CheckingForWin() 
 {
 	int aliveJinrai = 0;
 	int aliveNsf = 0;
@@ -143,7 +213,7 @@ void CheckingForWin()
 		PrintToChatAll("Somehow both teams died at the same time");
 		EndRoundAndShowWinner(BOTH_TEAMS);
 		
-		return;
+		return true;
 	}
 	
 	if (aliveNsf == 0)
@@ -151,7 +221,7 @@ void CheckingForWin()
 		PrintToChatAll("Win by elimination");
 		EndRoundAndShowWinner(TEAM_JINRAI);
 		
-		return;
+		return true;
 	}
 	
 	if (aliveJinrai == 0) 
@@ -159,24 +229,29 @@ void CheckingForWin()
 		PrintToChatAll("Win by elimination");
 		EndRoundAndShowWinner(TEAM_NSF);
 		
-		return;
+		return true;
 	}
 	
 	float roundTimeLeft = GameRules_GetPropFloat("m_fRoundTimeLeft");
 	
-	if (roundTimeLeft == 0.00)
+	if (roundTimeLeft == 0.0)
 	{
 		PrintToChatAll("Tie");
 		EndRoundAndShowWinner(BOTH_TEAMS);
 		
-		return;
+		return true;
 	}
-
-	return;
+	
+	return false;
 }
 
 public void OnRoundStartPost(Event event, const char[] name, bool dontBroadcast)
 {
+	if(!g_vipMap)
+	{
+		return;
+	}
+	
 	int trigger = FindEntityByTargetname("trigger_once", "vip_escape_point");
 	HookSingleEntityOutput(trigger, "OnStartTouch", Trigger_OnStartTouch);
 	
@@ -231,6 +306,11 @@ void ClearTimer()
 
 public void OnPlayerSpawnPost(Event event, const char[] name, bool dontBroadcast)
 {
+	if(!g_vipMap)
+	{
+		return;
+	}
+	
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 	
 	if(g_vipPlayer == -1)
@@ -244,7 +324,10 @@ void CheckClassAndSetVip(int client)
 	int atkTeam = GameRules_GetProp("m_iAttackingTeam");
 	int class = GetPlayerClass(client);
 	
-	if(GetClientTeam(client) == atkTeam && class == CLASS_ASSAULT && !g_checkPassed)
+	//if(pubGame)
+	//if(!g_checkPassed && GetClientTeam(client) == atkTeam && (class == CLASS_ASSAULT || class == CLASS_SUPPORT))
+	
+	if(!g_checkPassed && GetClientTeam(client) == atkTeam && class == CLASS_ASSAULT)
 	{
 		g_checkPassed = true;
 		RequestFrame(SetVip, client);
@@ -315,6 +398,11 @@ void MakeVip(int vip)
 
 public Action OnWeaponDrop(int client, int weapon)
 {
+	if(!g_vipMap)
+	{
+		return Plugin_Continue;
+	}
+	
 	// Other classes have no SMAC animation so make VIP unable to drop it
 	// Also VIP has no other weapons and are meant to use the SMAC
 	// So not going to allow them to drop it for now
@@ -326,6 +414,11 @@ public Action OnWeaponDrop(int client, int weapon)
 
 public void OnClientDisconnect_Post(int client)
 {
+	if(!g_vipMap)
+	{
+		return;
+	}
+	
 	if(g_vipPlayer == client)
 	{
 		ClearVip();
