@@ -14,7 +14,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.5.9",
+	version = "0.6.0",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -81,9 +81,9 @@ public void OnPluginStart()
 
 public void OnMapInit()
 {	
-	bool deathHook;
-	bool roundHook;
-	bool spawnHook;
+	static bool deathHook;
+	static bool roundHook;
+	static bool spawnHook;
 	
 	char mapName[32];
 	GetCurrentMap(mapName, sizeof(mapName));
@@ -110,8 +110,7 @@ public void OnMapInit()
 		{
 			spawnHook = true;
 		}
-		
-		
+		PrintToServer("death %s, round %s, spawn %s", deathHook ? "true":"false", roundHook ? "true":"false", spawnHook ? "true":"false")
 		CreateDetour();
 	}
 	else
@@ -122,11 +121,15 @@ public void OnMapInit()
 		
 		if(deathHook && roundHook && spawnHook)
 		{
+			PrintToServer("unhooking events");
 			UnhookEvent("player_death", Event_PlayerDeathPre, EventHookMode_Pre);
 			UnhookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post);
 			UnhookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post);
+			deathHook = false;
+			roundHook = false;
+			spawnHook = false;
 		}
-		
+		PrintToServer("death %s, round %s, spawn %s", deathHook ? "true":"false", roundHook ? "true":"false", spawnHook ? "true":"false")
 		DisableDetour();
 				
 	}
@@ -428,6 +431,11 @@ public void OnClientDisconnect_Post(int client)
 
 public Action Event_PlayerDeathPre(Event event, const char[] name, bool dontBroadcast)
 {
+	if(!g_vipMap)
+	{
+		return Plugin_Continue;
+	}
+	
 	int victim = GetClientOfUserId(GetEventInt(event, "userid"));
 	int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
 	int GameState = GameRules_GetProp("m_iGameState");
