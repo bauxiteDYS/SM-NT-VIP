@@ -7,32 +7,26 @@
 #define GAMEHUD_TIE 3
 #define GAMEHUD_JINRAI 4
 #define GAMEHUD_NSF 5
-
 #define BOTH_TEAMS 5
 
 public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.6.0",
+	version = "0.7.0",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
 static char g_vipName[] = "vip_player";
-
 DynamicDetour ddWin;
-
-Handle VipCheckTimer;
-
+Handle VipCreateTimer;
 int g_vipPlayer = -1;
 int g_vipTeam = -1;
 int g_opsTeam = -1;
 int g_vipKiller = -1;
-
 bool g_lateLoad;
 bool g_vipMap;
 bool g_vipEscaped;
-bool g_checkPassed;
 
 int GetOpposingTeam(int team)
 {
@@ -83,8 +77,6 @@ public void OnMapInit()
 {	
 	static bool deathHook;
 	static bool roundHook;
-	static bool spawnHook;
-	
 	char mapName[32];
 	GetCurrentMap(mapName, sizeof(mapName));
 	
@@ -106,32 +98,24 @@ public void OnMapInit()
 			roundHook = true;
 		}
 		
-		if(HookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post))
-		{
-			spawnHook = true;
-		}
-		PrintToServer("death %s, round %s, spawn %s", deathHook ? "true":"false", roundHook ? "true":"false", spawnHook ? "true":"false")
+		PrintToServer("death %s, round %s", deathHook ? "true":"false", roundHook ? "true":"false")
 		CreateDetour();
 	}
 	else
 	{
 		g_vipMap = false;
-		
 		PrintToServer("%s is not a vip map, plugin should not operate", mapName);
 		
-		if(deathHook && roundHook && spawnHook)
+		if(deathHook && roundHook)
 		{
 			PrintToServer("unhooking events");
 			UnhookEvent("player_death", Event_PlayerDeathPre, EventHookMode_Pre);
 			UnhookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post);
-			UnhookEvent("player_spawn", OnPlayerSpawnPost, EventHookMode_Post);
 			deathHook = false;
 			roundHook = false;
-			spawnHook = false;
 		}
-		PrintToServer("death %s, round %s, spawn %s", deathHook ? "true":"false", roundHook ? "true":"false", spawnHook ? "true":"false")
-		DisableDetour();
-				
+		PrintToServer("death %s, round %s", deathHook ? "true":"false", roundHook ? "true":"false")
+		DisableDetour();		
 	}
 }
 
@@ -149,7 +133,6 @@ void DisableDetour()
 	}
 
 	delete ddWin;
-
 	PrintToServer("Disabled detour");
 }
 
@@ -175,7 +158,6 @@ void CreateDetour()
 	}
 
 	CloseHandle(gd);
-
 	PrintToServer("Enabled detour");
 }
 
@@ -262,17 +244,43 @@ public void OnRoundStartPost(Event event, const char[] name, bool dontBroadcast)
 	ClearVip();
 	ClearTimer();
 	
-	VipCheckTimer = CreateTimer(35.0, CheckForVip, _, TIMER_FLAG_NO_MAPCHANGE); // Players can spawn for about 33s into the round
+	VipCreateTimer = CreateTimer(10.0, Timer_CreateVip, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public Action CheckForVip(Handle timer)
+public Action Timer_CreateVip(Handle timer)
 {
-	if(g_vipPlayer == -1)
+	SelectVip();
+	return Plugin_Stop;
+}
+
+void SelectVip()
+{
+	int atkTeam = GameRules_GetProp("m_iAttackingTeam");
+	int vipList[NEO_MAXPLAYERS+1];
+	int vipCount;
+	int randVip;
+	
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(IsClientInGame(client) && !IsFakeClient(client) && IsPlayerAlive(client) && GetClientTeam(client) == atkTeam)
+		{
+			vipList[vipCount] = client;
+			PrintToServer("count %d, client %d", vipCount, client);
+			vipCount++;
+		}
+	}
+	
+	if(vipCount > 0)
+	{
+		randVip = GetRandomInt(0, vipCount);
+		PrintToServer("vip %d", vipList[randVip]);
+		SetVip(vipList[randVip]);
+		return;
+	}
+	else
 	{
 		PrintToChatAll("It seems no VIP spawned, TDM mode this round");
 	}
-	
-	return Plugin_Stop;
 }
 
 void ClearWin()
@@ -295,46 +303,14 @@ void ClearVip()
 	g_vipPlayer = -1;
 	g_vipTeam = -1;
 	g_opsTeam = -1;
-	
-	g_checkPassed = false;
 }
 
 void ClearTimer()
 {
-	if(IsValidHandle(VipCheckTimer))
+	if(IsValidHandle(VipCreateTimer))
 	{
-		CloseHandle(VipCheckTimer);
+		CloseHandle(VipCreateTimer);
 	}
-}
-
-public void OnPlayerSpawnPost(Event event, const char[] name, bool dontBroadcast)
-{
-	if(!g_vipMap)
-	{
-		return;
-	}
-	
-	int client = GetClientOfUserId(GetEventInt(event, "userid"));
-	
-	if(g_vipPlayer == -1)
-	{
-		RequestFrame(CheckClassAndSetVip, client);
-	}
-}
-
-void CheckClassAndSetVip(int client)
-{
-	int atkTeam = GameRules_GetProp("m_iAttackingTeam");
-	int class = GetPlayerClass(client);
-	
-	//if(pubGame)
-	//if(!g_checkPassed && GetClientTeam(client) == atkTeam && (class == CLASS_ASSAULT || class == CLASS_SUPPORT))
-	
-	if(!g_checkPassed && GetClientTeam(client) == atkTeam && class == CLASS_ASSAULT)
-	{
-		g_checkPassed = true;
-		RequestFrame(SetVip, client);
-	}	
 }
 
 void SetVip(int theVip)
@@ -347,40 +323,36 @@ void SetVip(int theVip)
 		return;
 	}
 	
-	if(theVip <= 0)
-	{
-		g_checkPassed = false;
-		PrintToChatAll("Tried to set VIP to invalid client");
-		return;
-	}
-	
 	if(!IsClientInGame(theVip))
 	{
-		g_checkPassed = false;
 		PrintToChatAll("Tried to set VIP to a player not in the game");
-		return;
-	}
-	
-	if(g_vipPlayer != -1)
-	{
-		PrintToChatAll("Tried to set VIP when one already exists, it needs to be cleared first");
+		SelectVip();
 		return;
 	}
 	
 	g_vipPlayer = theVip;
 	g_vipTeam = GetClientTeam(theVip);
 	g_opsTeam = GetOpposingTeam(g_vipTeam);
-	
 	PrintToChatAll("VIP Team: %s, VIP player: %N", g_vipTeam == TEAM_NSF ? "NSF" : "Jinrai", theVip);
 	PrintToConsoleAll("VIP Team: %s, VIP player: %N", g_vipTeam == TEAM_NSF ? "NSF" : "Jinrai", theVip);
-	
 	MakeVip(theVip);
 }
 
 void MakeVip(int vip)
 {
-	StripPlayerWeapons(vip, false); // No VIP animations for knife
+	if(!IsClientInGame(vip))
+	{
+		ClearVip();
+		return;
+	}
 	
+	if(GetPlayerClass(vip) != 2)
+	{
+		ForceClass(vip);
+		return;
+	}
+
+	StripPlayerWeapons(vip, false); // No VIP animations for knife
 	int newWeapon = GivePlayerItem(vip, "weapon_smac"); 
 
 	if(newWeapon != -1)
@@ -391,12 +363,61 @@ void MakeVip(int vip)
 	char vipModel[] = "models/player/vip.mdl";
 	SetEntityModel(vip, vipModel);
 	DispatchKeyValue(vip, "targetname", g_vipName); // Same as "m_iName" but can't set that directly first otherwise server crash
-	
 	SetEntityHealth(vip, 120);
-	
 	SetEntProp(newWeapon, Prop_Data, "m_iClip1", 190);
-	
 	SDKHook(vip, SDKHook_WeaponDrop, OnWeaponDrop);
+}
+
+void ForceClass(int client)
+{
+	if(!IsClientInGame(client))
+	{
+		ClearVip();
+		return;
+	}
+	
+	StripPlayerWeapons(client, false);
+	RequestFrame(RespawnNewClass, client); // does this need to be delayed by a frame?
+}
+
+void RespawnNewClass(int client)
+{
+	if(!IsClientInGame(client))
+	{
+		ClearVip();
+		return;
+	}
+	
+	SetNewClassProps(client);
+	
+	static Handle call = INVALID_HANDLE;
+	if (call == INVALID_HANDLE)
+	{
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetSignature(SDKLibrary_Server, "\x56\x8B\xF1\x8B\x06\x8B\x90\xBC\x04\x00\x00\x57\xFF\xD2\x8B\x06", 16);
+		call = EndPrepSDKCall();
+		if (call == INVALID_HANDLE)
+		{
+			SetFailState("Failed to prepare SDK call");
+		}
+	}
+	SDKCall(call, client);
+	
+	RequestFrame(MakeVip, client);
+}
+
+SetNewClassProps(int client)
+{
+	FakeClientCommand(client, "setclass 2");
+	SetEntProp(client, Prop_Send, "m_iLives", 1);
+	SetEntProp(client, Prop_Data, "m_iObserverMode", 0);
+	SetEntProp(client, Prop_Data, "m_iHealth", 100);
+	SetEntProp(client, Prop_Data, "m_lifeState", 0);
+	SetEntProp(client, Prop_Data, "m_fInitHUD", 1);
+	SetEntProp(client, Prop_Data, "m_takedamage", 2);
+	SetEntProp(client, Prop_Send, "deadflag", 0);
+	SetEntPropFloat(client, Prop_Send, "m_flDeathTime", 0.0);
+	SetEntPropEnt(client, Prop_Data, "m_hObserverTarget", -1, 0);
 }
 
 public Action OnWeaponDrop(int client, int weapon)
@@ -524,7 +545,6 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	}
 	
 	RewardPlayers(team);
-	
 	ClearTimer();
 }
 
