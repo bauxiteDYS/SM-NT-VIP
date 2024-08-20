@@ -342,7 +342,7 @@ void MakeVip(int vip)
 {
 	if(!IsClientInGame(vip))
 	{
-		ClearVip();
+		//ClearVip(); // let disconnect hook handle this
 		return;
 	}
 	
@@ -372,7 +372,7 @@ void ForceClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		ClearVip();
+		//ClearVip(); // let disconnect hook handle this
 		return;
 	}
 	
@@ -384,7 +384,7 @@ void RespawnNewClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		ClearVip();
+		//ClearVip(); // let disconnect hook handle this
 		return;
 	}
 	
