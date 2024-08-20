@@ -265,7 +265,7 @@ void SelectVip()
 		if(IsClientInGame(client) && !IsFakeClient(client) && IsPlayerAlive(client) && GetClientTeam(client) == atkTeam)
 		{
 			vipList[vipCount] = client;
-			PrintToServer("count %d, client %d", vipCount, client);
+			//PrintToServer("count %d, client %d", vipCount, client);
 			vipCount++;
 		}
 	}
@@ -273,7 +273,7 @@ void SelectVip()
 	if(vipCount > 0)
 	{
 		randVip = GetRandomInt(0, vipCount);
-		PrintToServer("vip %d", vipList[randVip]);
+		//PrintToServer("vip %d", vipList[randVip]);
 		SetVip(vipList[randVip]);
 		return;
 	}
