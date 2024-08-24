@@ -9,11 +9,13 @@
 #define GAMEHUD_NSF 5
 #define BOTH_TEAMS 5
 
+//#define DEBUG true
+
 public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.7.0",
+	version = "0.7.3",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -69,7 +71,6 @@ public void OnPluginStart()
 	if(g_lateLoad)
 	{
 		OnMapInit();
-		PrintToServer("Late plugin load");
 	}
 }
 
@@ -83,9 +84,6 @@ public void OnMapInit()
 	if(StrContains(mapName, "_vip", false) != -1)
 	{
 		g_vipMap = true;
-		
-		PrintToServer("%s is a vip map, unloading wincond plugin for now", mapName);
-		
 		ServerCommand("sm plugins unload nt_wincond"); 
 		
 		if(HookEventEx("player_death", Event_PlayerDeathPre, EventHookMode_Pre))
@@ -98,23 +96,20 @@ public void OnMapInit()
 			roundHook = true;
 		}
 		
-		PrintToServer("death %s, round %s", deathHook ? "true":"false", roundHook ? "true":"false")
 		CreateDetour();
 	}
 	else
 	{
 		g_vipMap = false;
-		PrintToServer("%s is not a vip map, plugin should not operate", mapName);
 		
 		if(deathHook && roundHook)
 		{
-			PrintToServer("unhooking events");
 			UnhookEvent("player_death", Event_PlayerDeathPre, EventHookMode_Pre);
 			UnhookEvent("game_round_start", OnRoundStartPost, EventHookMode_Post);
 			deathHook = false;
 			roundHook = false;
 		}
-		PrintToServer("death %s, round %s", deathHook ? "true":"false", roundHook ? "true":"false")
+
 		DisableDetour();		
 	}
 }
@@ -128,12 +123,10 @@ void DisableDetour()
 	
 	if(!ddWin.Disable(Hook_Pre, CheckWinCondition))	
 	{
-		PrintToServer("Couldn't disable detour");
 		return;
 	}
-
+	
 	delete ddWin;
-	PrintToServer("Disabled detour");
 }
 
 void CreateDetour() 
@@ -158,7 +151,6 @@ void CreateDetour()
 	}
 
 	CloseHandle(gd);
-	PrintToServer("Enabled detour");
 }
 
 MRESReturn CheckWinCondition(Address pThis, DHookReturn hReturn)
@@ -195,25 +187,22 @@ bool CheckingForWin()
 	
 	if(aliveNsf == 0 && aliveJinrai == 0)
 	{
-		PrintToChatAll("Somehow both teams died at the same time");
+		PrintToChatAll("[VIP] Somehow both teams died at the same time");
 		EndRoundAndShowWinner(BOTH_TEAMS);
-		
 		return true;
 	}
 	
 	if (aliveNsf == 0)
 	{
-		PrintToChatAll("Win by elimination");
+		PrintToChatAll("[VIP] Win by elimination");
 		EndRoundAndShowWinner(TEAM_JINRAI);
-		
 		return true;
 	}
 	
 	if (aliveJinrai == 0) 
 	{
-		PrintToChatAll("Win by elimination");
+		PrintToChatAll("[VIP] Win by elimination");
 		EndRoundAndShowWinner(TEAM_NSF);
-		
 		return true;
 	}
 	
@@ -221,9 +210,8 @@ bool CheckingForWin()
 	
 	if (roundTimeLeft == 0.0)
 	{
-		PrintToChatAll("Tie");
+		PrintToChatAll("[VIP] Tie");
 		EndRoundAndShowWinner(BOTH_TEAMS);
-		
 		return true;
 	}
 	
@@ -244,42 +232,102 @@ public void OnRoundStartPost(Event event, const char[] name, bool dontBroadcast)
 	ClearVip();
 	ClearTimer();
 	
-	VipCreateTimer = CreateTimer(10.0, Timer_CreateVip, _, TIMER_FLAG_NO_MAPCHANGE);
+	VipCreateTimer = CreateTimer(9.0, Timer_CreateVip);
 }
 
 public Action Timer_CreateVip(Handle timer)
 {
+	int GameState = GameRules_GetProp("m_iGameState");
+	
+	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
+	{
+		return Plugin_Stop;
+	}
+	
 	SelectVip();
 	return Plugin_Stop;
 }
 
 void SelectVip()
 {
+	static int lastJinraiVip;
+	static int lastNSFVip;
+	
+	bool nsfDupVIP;
+	bool jinDupVIP;
+	
 	int atkTeam = GameRules_GetProp("m_iAttackingTeam");
-	int vipList[NEO_MAXPLAYERS+1];
+	int vipList[NEO_MAXPLAYERS];
 	int vipCount;
 	int randVip;
 	
 	for(int client = 1; client <= MaxClients; client++)
 	{
-		if(IsClientInGame(client) && !IsFakeClient(client) && IsPlayerAlive(client) && GetClientTeam(client) == atkTeam)
+		if(!IsClientInGame(client) || IsFakeClient(client) || !IsPlayerAlive(client) || GetClientTeam(client) != atkTeam)
 		{
-			vipList[vipCount] = client;
-			//PrintToServer("count %d, client %d", vipCount, client);
-			vipCount++;
+			continue;
 		}
+		
+		if(atkTeam == TEAM_NSF && lastNSFVip == client)
+		{
+			nsfDupVIP = true;
+			continue;
+		}
+		else if(atkTeam == TEAM_JINRAI && lastJinraiVip == client)
+		{
+			jinDupVIP = true;
+			continue;
+		}
+		vipList[vipCount] = client;
+		vipCount++;
 	}
 	
-	if(vipCount > 0)
+	if(jinDupVIP && vipCount == 0)
 	{
-		randVip = GetRandomInt(0, vipCount);
-		//PrintToServer("vip %d", vipList[randVip]);
-		SetVip(vipList[randVip]);
+		vipList[vipCount] = lastJinraiVip;
+		vipCount++;
+	}
+	else if (nsfDupVIP && vipCount == 0)
+	{
+		vipList[vipCount] = lastNSFVip;
+		vipCount++;
+	}
+	
+	if(vipCount == 0)
+	{
+		PrintToChatAll("[VIP] It seems no VIP spawned, TDM mode this round");
 		return;
 	}
-	else
+	else if(vipCount == 1)
+	{	
+		SetVip(vipList[0]);
+		
+		if(atkTeam == TEAM_NSF)
+		{
+			lastNSFVip = vipList[0];
+		}
+		else
+		{
+			lastJinraiVip = vipList[0];
+		}
+		
+		return;
+	}
+	else if(vipCount >= 2)
 	{
-		PrintToChatAll("It seems no VIP spawned, TDM mode this round");
+		randVip = GetRandomInt(0, vipCount-1); // the vipcount is 1 higher than the array position
+		SetVip(vipList[randVip]);
+		
+		if(atkTeam == TEAM_NSF)
+		{
+			lastNSFVip = vipList[randVip];
+		}
+		else
+		{
+			lastJinraiVip = vipList[randVip];
+		}
+		
+		return;
 	}
 }
 
@@ -310,6 +358,7 @@ void ClearTimer()
 	if(IsValidHandle(VipCreateTimer))
 	{
 		CloseHandle(VipCreateTimer);
+		VipCreateTimer = null;
 	}
 }
 
@@ -319,14 +368,12 @@ void SetVip(int theVip)
 	
 	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
 	{
-		PrintToChatAll("Can't set VIP - round is already over or hasn't started yet");
 		return;
 	}
 	
 	if(!IsClientInGame(theVip))
 	{
-		PrintToChatAll("Tried to set VIP to a player not in the game");
-		SelectVip();
+		//SelectVip();
 		return;
 	}
 	
@@ -342,16 +389,32 @@ void MakeVip(int vip)
 {
 	if(!IsClientInGame(vip))
 	{
-		//ClearVip(); // let disconnect hook handle this
+		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 	
 	if(GetPlayerClass(vip) != 2)
 	{
+		if(!GameRules_GetProp("m_bFreezePeriod"))
+		{
+			return;
+		}
+		
 		ForceClass(vip);
 		return;
 	}
+	
+	SetupVIP(vip);
+}
 
+void SetupVIP(int vip)
+{
+	if(!IsClientInGame(vip))
+	{
+		//ClearVip(); let disconnect hook handle this
+		return;
+	}
+	
 	StripPlayerWeapons(vip, false); // No VIP animations for knife
 	int newWeapon = GivePlayerItem(vip, "weapon_smac"); 
 
@@ -372,7 +435,7 @@ void ForceClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		//ClearVip(); // let disconnect hook handle this
+		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 	
@@ -384,13 +447,13 @@ void RespawnNewClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		//ClearVip(); // let disconnect hook handle this
+		//ClearVip(); let disconnect hook handle this
 		return;
 	}
-	
+
 	SetNewClassProps(client);
-	
 	static Handle call = INVALID_HANDLE;
+	
 	if (call == INVALID_HANDLE)
 	{
 		StartPrepSDKCall(SDKCall_Player);
@@ -401,14 +464,16 @@ void RespawnNewClass(int client)
 			SetFailState("Failed to prepare SDK call");
 		}
 	}
-	SDKCall(call, client);
 	
-	RequestFrame(MakeVip, client);
+	SDKCall(call, client);
+	RequestFrame(SetupVIP, client);
 }
 
 SetNewClassProps(int client)
 {
 	FakeClientCommand(client, "setclass 2");
+	FakeClientCommand(client, "setvariant 2");
+	FakeClientCommand(client, "loadout 0");
 	SetEntProp(client, Prop_Send, "m_iLives", 1);
 	SetEntProp(client, Prop_Data, "m_iObserverMode", 0);
 	SetEntProp(client, Prop_Data, "m_iHealth", 100);
@@ -446,7 +511,7 @@ public void OnClientDisconnect_Post(int client)
 	if(g_vipPlayer == client)
 	{
 		ClearVip();
-		PrintToChatAll("VIP disconnected, TDM mode for now? (probably)!");
+		PrintToChatAll("[VIP] Error: VIP disconnected, TDM mode for now? (probably)!");
 	}
 }
 
@@ -476,11 +541,11 @@ public Action Event_PlayerDeathPre(Event event, const char[] name, bool dontBroa
 		if(attacker != victim && attacker > 0)
 		{
 			g_vipKiller = attacker;
-			PrintToChatAll("VIP was killed by %N!", attacker);
+			PrintToChatAll("[VIP] VIP was killed by %N!", attacker);
 		}
 		else
 		{
-			PrintToChatAll("VIP died!");
+			PrintToChatAll("[VIP] VIP died!");
 		}
 		
 		EndRoundAndShowWinner(g_opsTeam);
@@ -489,7 +554,7 @@ public Action Event_PlayerDeathPre(Event event, const char[] name, bool dontBroa
 	}
 	else if(g_vipPlayer >= 1 && IsPlayerDead(g_vipPlayer)) 
 	{
-		PrintToChatAll("VIP somehow died??!");
+		PrintToChatAll("[VIP] Error: VIP somehow died??!");
 		EndRoundAndShowWinner(g_opsTeam);
 		
 		return Plugin_Continue; // double check cos I think first check fails in rare occasion? (dunno?) - is it a problem?
@@ -504,7 +569,7 @@ void Trigger_OnStartTouch(const char[] output, int caller, int activator, float 
 	{
 		g_vipEscaped = true;
 		EndRoundAndShowWinner(g_vipTeam);
-		PrintToChatAll("VIP escaped!");
+		PrintToChatAll("[VIP] VIP escaped!");
 	}
 }
 
@@ -514,15 +579,15 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	
 	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
 	{
-		PrintToChatAll("Can't end round - it's already over or hasn't started yet");
 		return;
 	}
 	
 	if(team != TEAM_JINRAI && team != TEAM_NSF && team != BOTH_TEAMS)
 	{
-		PrintToChatAll("Something went wrong, trying to show winner of unknown team");
 		return;
 	}
+	
+	ClearTimer();
 	
 	GameRules_SetProp("m_iGameState", GAMESTATE_ROUND_OVER);
 	GameRules_SetPropFloat( "m_fRoundTimeLeft", 15.0 );
@@ -533,7 +598,7 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	
 		if(g_vipPlayer > 0)
 		{
-			PrintToChatAll("VIP Survived!");
+			PrintToChatAll("[VIP] VIP Survived!");
 		}
 	}
 	else
@@ -545,7 +610,6 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	}
 	
 	RewardPlayers(team);
-	ClearTimer();
 }
 
 void RewardPlayers(int winTeam)
@@ -557,37 +621,35 @@ void RewardPlayers(int winTeam)
 	
 	if(g_vipKiller > 0 && g_vipEscaped)
 	{
-		PrintToChatAll("Something went wrong with the player rewards");
-		PrintToConsoleAll("Something went wrong with the player rewards");
+		return;
 	}
 	
 	if(g_vipKiller > 0 && IsClientInGame(g_vipKiller))
 	{
 		int xp = GetPlayerXP(g_vipKiller) + bonusPoints;
 		SetPlayerXP(g_vipKiller, xp);
-		PrintToChatAll("Giving bonus XP to %N for killing VIP", g_vipKiller);
+		PrintToChatAll("[VIP] Giving bonus XP to %N for killing VIP", g_vipKiller);
 	}
 	
 	if(g_vipEscaped && IsClientInGame(g_vipPlayer))
 	{
 		int xp = GetPlayerXP(g_vipPlayer) + bonusPoints;
 		SetPlayerXP(g_vipPlayer, xp);
-		PrintToChatAll("Giving bonus XP to %N for escaping", g_vipPlayer);
+		PrintToChatAll("[VIP] Giving bonus XP to %N for escaping", g_vipPlayer);
 	}
 	
 	if(winTeam == TEAM_JINRAI || winTeam == TEAM_NSF)
 	{
 		newPoints = 2;
-		PrintToChatAll("Team %s got a reward for winning", winTeam == TEAM_NSF ? "NSF" : "Jinrai");
+		PrintToChatAll("[VIP] Team %s got a reward for winning", winTeam == TEAM_NSF ? "NSF" : "Jinrai");
 	}
 	else if(winTeam == BOTH_TEAMS)
 	{
 		newPoints = 1;
-		PrintToChatAll("Both teams got a small reward for tie");
+		PrintToChatAll("[VIP] Both teams got a small reward for tie");
 	}
 	else
 	{
-		PrintToChatAll("Error, tried to reward players on invalid team");
 		return;
 	}
 	
