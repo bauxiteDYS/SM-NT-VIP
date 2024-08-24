@@ -291,7 +291,9 @@ void SelectVip()
 		vipList[vipCount] = client;
 		vipCount++;
 	}
-	
+	#if DEBUG
+	PrintMsg("[VIP Debug] Potential VIPs found: %d", PRNT_ALL, vipCount);
+	#endif
 	if(jinDupVIP && vipCount == 0)
 	{
 		vipList[vipCount] = lastJinraiVip;
