@@ -19,13 +19,14 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.7.5",
+	version = "0.7.6",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
 static char g_vipName[] = "vip_player";
 DynamicDetour ddWin;
 Handle VipCreateTimer;
+int g_oldVipClass;
 int g_vipPlayer = -1;
 int g_vipTeam = -1;
 int g_opsTeam = -1;
@@ -229,7 +230,7 @@ public void OnRoundStartPost(Event event, const char[] name, bool dontBroadcast)
 		return;
 	}
 	#if DEBUG
-	PrintMsg("[VIP Debug] New round started", PRNT_CNSL | PRNT_SRVR);
+	PrintMsg("[VIP Debug] New round started", PRNT_SRVR);
 	#endif
 	int trigger = FindEntityByTargetname("trigger_once", "vip_escape_point");
 	HookSingleEntityOutput(trigger, "OnStartTouch", Trigger_OnStartTouch);
@@ -292,7 +293,7 @@ void SelectVip()
 		vipCount++;
 	}
 	#if DEBUG
-	PrintMsg("[VIP Debug] Potential VIPs found: %d", PRNT_ALL, vipCount);
+	PrintMsg("[VIP Debug] Potential VIPs found: %d", PRNT_SRVR | PRNT_CNSL, vipCount);
 	#endif
 	if(jinDupVIP && vipCount == 0)
 	{
@@ -363,6 +364,7 @@ void ClearVip()
 	g_vipPlayer = -1;
 	g_vipTeam = -1;
 	g_opsTeam = -1;
+	g_oldVipClass = 0;
 }
 
 void ClearTimer()
@@ -372,7 +374,7 @@ void ClearTimer()
 		CloseHandle(VipCreateTimer);
 		VipCreateTimer = null;
 		#if DEBUG
-		PrintMsg("[VIP Debug] Killing Timer", PRNT_CNSL | PRNT_SRVR);
+		PrintMsg("[VIP Debug] Killing Timer", PRNT_SRVR);
 		#endif
 	}
 }
@@ -413,12 +415,16 @@ void MakeVip(int vip)
 		return;
 	}
 	
-	if(GetPlayerClass(vip) != 2)
+	int class = GetPlayerClass(vip);
+	
+	if(class != 2)
 	{
 		if(!GameRules_GetProp("m_bFreezePeriod"))
 		{
 			return;
 		}
+		
+		g_oldVipClass = class;
 		
 		ForceClass(vip);
 		return;
@@ -457,6 +463,10 @@ void SetupVIP(int vip)
 		PrintMsg("[VIP Debug] Somehow set vip to the wrong class: %d", PRNT_ALL, class);
 	}
 	#endif
+	
+	FakeClientCommand(vip, "setclass %d", g_oldVipClass);
+	FakeClientCommand(vip, "setvariant 2");
+	FakeClientCommand(vip, "loadout 0");
 }
 
 void ForceClass(int client)
