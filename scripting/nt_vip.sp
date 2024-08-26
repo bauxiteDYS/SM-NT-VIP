@@ -17,13 +17,14 @@
 
 public Plugin myinfo = {
 	name = "NT VIP mode",
-	description = "Enabled VIP game mode mode for VIP maps, SMAC plugin required",
-	author = "bauxite, Credits to Destroygirl, Agiel, Rain, SoftAsHell",
+	description = "Enables VIP game mode mode for VIP maps, SMAC plugin required",
+	author = "bauxite, Destroygirl, Agiel, Rain, SoftAsHell",
 	version = "0.7.6",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
 static char g_vipName[] = "vip_player";
+static char vipModel[] = "models/player/vip.mdl";
 DynamicDetour ddWin;
 Handle VipCreateTimer;
 int g_oldVipClass;
@@ -78,6 +79,8 @@ public void OnPluginStart()
 		OnMapInit();
 	}
 }
+
+// ISSUE: at the moment if nt_wincond is called something else, everything will break
 
 public void OnMapInit()
 {	
@@ -328,7 +331,7 @@ void SelectVip()
 	}
 	else if(vipCount >= 2)
 	{
-		randVip = GetRandomInt(0, vipCount-1); // the vipcount is 1 higher than the array position
+		randVip = GetRandomInt(0, vipCount-1); // the vipcount is 1 higher than the array index
 		SetVip(vipList[randVip]);
 		
 		if(atkTeam == TEAM_NSF)
@@ -358,6 +361,14 @@ void ClearVip()
 		{
 			DispatchKeyValue(g_vipPlayer, "targetname", "RndPlyr");
 			SDKUnhook(g_vipPlayer, SDKHook_WeaponDrop, OnWeaponDrop)
+			
+			if(g_oldVipClass == 1 || g_oldVipClass == 3)
+			{
+				SetPlayerClass(g_vipPlayer, g_oldVipClass);
+				FakeClientCommand(g_vipPlayer, "setclass %d", g_oldVipClass);
+				FakeClientCommand(g_vipPlayer, "setvariant 2");
+				FakeClientCommand(g_vipPlayer, "loadout 1");
+			}
 		}
 	}
 	
@@ -393,9 +404,8 @@ void SetVip(int theVip)
 	
 	if(!IsClientInGame(theVip))
 	{
-		#if DEBUG
-		PrintMsg("[VIP Debug] Can't set client: %d as VIP as they are not in-game", PRNT_ALL, theVip);
-		#endif
+		PrintMsg("[VIP] Error: Can't set client: %d as VIP as they are not in-game", PRNT_ALL, theVip);
+		PrintMsg("[VIP] Error: No VIP for this round, TDM Mode", PRNT_ALL);
 		//SelectVip();
 		return;
 	}
@@ -411,7 +421,6 @@ void MakeVip(int vip)
 {
 	if(!IsClientInGame(vip))
 	{
-		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 	
@@ -437,7 +446,6 @@ void SetupVIP(int vip)
 {
 	if(!IsClientInGame(vip))
 	{
-		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 	
@@ -449,7 +457,6 @@ void SetupVIP(int vip)
 		AcceptEntityInput(newWeapon, "use", vip, vip);
 	}
 	
-	char vipModel[] = "models/player/vip.mdl";
 	SetEntityModel(vip, vipModel);
 	DispatchKeyValue(vip, "targetname", g_vipName); // Same as "m_iName" but can't set that directly first otherwise server crash
 	SetEntityHealth(vip, 120);
@@ -463,17 +470,12 @@ void SetupVIP(int vip)
 		PrintMsg("[VIP Debug] Somehow set vip to the wrong class: %d", PRNT_ALL, class);
 	}
 	#endif
-	
-	FakeClientCommand(vip, "setclass %d", g_oldVipClass);
-	FakeClientCommand(vip, "setvariant 2");
-	FakeClientCommand(vip, "loadout 0");
 }
 
 void ForceClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 	
@@ -485,7 +487,6 @@ void RespawnNewClass(int client)
 {
 	if(!IsClientInGame(client))
 	{
-		//ClearVip(); let disconnect hook handle this
 		return;
 	}
 
