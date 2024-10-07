@@ -4,7 +4,7 @@
 #include <dhooks>
 #include <neotokyo>
 
-#define DEBUG true
+#define DEBUG false
 #define PRNT_SRVR (1<<0)
 #define PRNT_CNSL (1<<1)
 #define PRNT_CHT (1<<2)
@@ -19,7 +19,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enables VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.7.6",
+	version = "0.7.7",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -27,6 +27,7 @@ static char g_vipName[] = "vip_player";
 static char vipModel[] = "models/player/vip.mdl";
 DynamicDetour ddWin;
 Handle VipCreateTimer;
+Handle VipRevertClassTimer;
 int g_oldVipClass;
 int g_vipPlayer = -1;
 int g_vipTeam = -1;
@@ -364,10 +365,11 @@ void ClearVip()
 			
 			if(g_oldVipClass == 1 || g_oldVipClass == 3)
 			{
-				SetPlayerClass(g_vipPlayer, g_oldVipClass);
-				FakeClientCommand(g_vipPlayer, "setclass %d", g_oldVipClass);
-				FakeClientCommand(g_vipPlayer, "setvariant 2");
-				FakeClientCommand(g_vipPlayer, "loadout 1");
+				if(!IsValidHandle(VipRevertClassTimer))
+				{
+					int oldVipUserId = GetClientUserId(g_vipPlayer);
+					VipRevertClassTimer = CreateTimer(11.0, RevertClassChange, oldVipUserId, TIMER_FLAG_NO_MAPCHANGE);
+				}
 			}
 		}
 	}
@@ -375,7 +377,24 @@ void ClearVip()
 	g_vipPlayer = -1;
 	g_vipTeam = -1;
 	g_opsTeam = -1;
+}
+
+public Action RevertClassChange(Handle timer, int userid)
+{
+	int oldVip = GetClientOfUserId(userid);
+	
+	if(oldVip > 0 && IsClientInGame(oldVip) && IsPlayerAlive(oldVip))
+	{
+		FakeClientCommand(oldVip, "setclass %d", g_oldVipClass);
+		FakeClientCommand(oldVip, "setvariant 2");
+		FakeClientCommand(oldVip, "loadout 0");
+		StripPlayerWeapons(oldVip, false);
+		RespawnOldClass(oldVip);
+	}
+	
 	g_oldVipClass = 0;
+		
+	return Plugin_Stop;
 }
 
 void ClearTimer()
@@ -506,6 +525,29 @@ void RespawnNewClass(int client)
 	
 	SDKCall(call, client);
 	RequestFrame(SetupVIP, client);
+}
+
+void RespawnOldClass(int client)
+{
+	if(!IsClientInGame(client) || !IsPlayerAlive(client))
+	{
+		return;
+	}
+
+	static Handle call = INVALID_HANDLE;
+	
+	if (call == INVALID_HANDLE)
+	{
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetSignature(SDKLibrary_Server, "\x56\x8B\xF1\x8B\x06\x8B\x90\xBC\x04\x00\x00\x57\xFF\xD2\x8B\x06", 16);
+		call = EndPrepSDKCall();
+		if (call == INVALID_HANDLE)
+		{
+			SetFailState("Failed to prepare SDK call");
+		}
+	}
+	
+	SDKCall(call, client);
 }
 
 SetNewClassProps(int client)
