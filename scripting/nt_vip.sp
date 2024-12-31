@@ -8,7 +8,8 @@
 #define PRNT_SRVR (1<<0)
 #define PRNT_CNSL (1<<1)
 #define PRNT_CHT (1<<2)
-#define PRNT_ALL 7
+#define PRNT_CNT (1<<3)
+#define PRNT_THREE 7
 
 #define GAMEHUD_TIE 3
 #define GAMEHUD_JINRAI 4
@@ -19,7 +20,7 @@ public Plugin myinfo = {
 	name = "NT VIP mode",
 	description = "Enables VIP game mode mode for VIP maps, SMAC plugin required",
 	author = "bauxite, Destroygirl, Agiel, Rain, SoftAsHell",
-	version = "0.7.7",
+	version = "0.7.9",
 	url = "https://github.com/bauxiteDYS/SM-NT-VIP",
 };
 
@@ -121,6 +122,30 @@ public void OnMapInit()
 
 		DisableDetour();		
 	}
+}
+
+public void OnMapStart()
+{
+	if(!g_vipMap)
+	{
+		return;
+	}
+	
+	StoreToAddress(view_as<Address>(0x2245556E), 'V', NumberType_Int8);
+	StoreToAddress(view_as<Address>(0x2245556F), 'I', NumberType_Int8);
+	StoreToAddress(view_as<Address>(0x22455570), 'P', NumberType_Int8);
+}
+
+public void OnMapEnd()
+{
+	if(!g_vipMap)
+	{
+		return;
+	}
+	
+	StoreToAddress(view_as<Address>(0x2245556E), 'C', NumberType_Int8);
+	StoreToAddress(view_as<Address>(0x2245556F), 'T', NumberType_Int8);
+	StoreToAddress(view_as<Address>(0x22455570), 'G', NumberType_Int8);
 }
 
 void DisableDetour() 
@@ -401,8 +426,7 @@ void ClearTimer()
 {
 	if(IsValidHandle(VipCreateTimer))
 	{
-		CloseHandle(VipCreateTimer);
-		VipCreateTimer = null;
+		delete VipCreateTimer;
 		#if DEBUG
 		PrintMsg("[VIP Debug] Killing Timer", PRNT_SRVR);
 		#endif
@@ -416,15 +440,15 @@ void SetVip(int theVip)
 	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
 	{
 		#if DEBUG
-		PrintMsg("[VIP Debug] Can't set VIP as round is not active", PRNT_ALL);
+		PrintMsg("[VIP Debug] Can't set VIP as round is not active", PRNT_THREE);
 		#endif
 		return;
 	}
 	
 	if(!IsClientInGame(theVip))
 	{
-		PrintMsg("[VIP] Error: Can't set client: %d as VIP as they are not in-game", PRNT_ALL, theVip);
-		PrintMsg("[VIP] Error: No VIP for this round, TDM Mode", PRNT_ALL);
+		PrintMsg("[VIP] Error: Can't set client: %d as VIP as they are not in-game", PRNT_THREE, theVip);
+		PrintMsg("[VIP] Error: No VIP for this round, TDM Mode", PRNT_THREE);
 		//SelectVip();
 		return;
 	}
@@ -486,7 +510,7 @@ void SetupVIP(int vip)
 	int class = GetPlayerClass(vip);
 	if(class != 2)
 	{
-		PrintMsg("[VIP Debug] Somehow set vip to the wrong class: %d", PRNT_ALL, class);
+		PrintMsg("[VIP Debug] Somehow set vip to the wrong class: %d", PRNT_THREE, class);
 	}
 	#endif
 }
@@ -550,7 +574,7 @@ void RespawnOldClass(int client)
 	SDKCall(call, client);
 }
 
-SetNewClassProps(int client)
+void SetNewClassProps(int client)
 {
 	FakeClientCommand(client, "setclass 2");
 	FakeClientCommand(client, "setvariant 2");
@@ -622,11 +646,13 @@ public Action Event_PlayerDeathPre(Event event, const char[] name, bool dontBroa
 		if(attacker != victim && attacker > 0)
 		{
 			g_vipKiller = attacker;
-			PrintMsg("[VIP] VIP was killed by %N!", PRNT_CHT | PRNT_CNSL, attacker);
+			PrintMsg("[VIP] VIP was assassinated by %N!", PRNT_CHT | PRNT_CNSL, attacker);
+			PrintCenterTextAll("VIP was assassinated by %N!", attacker);
 		}
 		else
 		{
 			PrintMsg("[VIP] VIP died!", PRNT_CHT | PRNT_CNSL);
+			PrintCenterTextAll("VIP died!");
 		}
 		
 		EndRoundAndShowWinner(g_opsTeam);
@@ -651,6 +677,7 @@ void Trigger_OnStartTouch(const char[] output, int caller, int activator, float 
 		g_vipEscaped = true;
 		EndRoundAndShowWinner(g_vipTeam);
 		PrintMsg("[VIP] VIP escaped!", PRNT_CHT | PRNT_CNSL);
+		PrintCenterTextAll("VIP escaped!");
 	}
 }
 
@@ -661,7 +688,7 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	if(GameState == GAMESTATE_ROUND_OVER || GameState == GAMESTATE_WAITING_FOR_PLAYERS)
 	{
 		#if DEBUG
-		PrintMsg("[VIP Debug] Error: Awarding win when round is over", PRNT_ALL);
+		PrintMsg("[VIP Debug] Error: Awarding win when round is over", PRNT_THREE);
 		#endif
 		return;
 	}
@@ -669,7 +696,7 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 	if(team != TEAM_JINRAI && team != TEAM_NSF && team != BOTH_TEAMS)
 	{
 		#if DEBUG
-		PrintMsg("[VIP Debug] Error: Awarding win to unknown team: %d", PRNT_ALL, team);
+		PrintMsg("[VIP Debug] Error: Awarding win to unknown team: %d", PRNT_THREE, team);
 		#endif
 		return;
 	}
@@ -701,7 +728,7 @@ void EndRoundAndShowWinner(int team) //what about during comp pause
 
 void RewardPlayers(int winTeam)
 {
-	// Rewards need a rework
+	// Rewards need a rework tie should probably give 0 points
 	
 	int bonusPoints = 2;
 	int newPoints;
@@ -709,7 +736,7 @@ void RewardPlayers(int winTeam)
 	if(g_vipKiller > 0 && g_vipEscaped)
 	{
 		#if DEBUG
-		PrintMsg("[VIP Debug] Error: Can't set player rewards as VIP was killed but also escaped somehow", PRNT_ALL);
+		PrintMsg("[VIP Debug] Error: Can't set player rewards as VIP was killed but also escaped somehow", PRNT_THREE);
 		#endif
 		return;
 	}
@@ -764,7 +791,7 @@ void PrintMsg(const char[] msg, int flags, any ...)
 	
 	if (flags & PRNT_SRVR)
 	{
-	PrintToServer(debugMsg);
+		PrintToServer(debugMsg);
 	}
 
 	if (flags & PRNT_CHT)
@@ -775,5 +802,10 @@ void PrintMsg(const char[] msg, int flags, any ...)
 	if (flags & PRNT_CNSL)
 	{
 		PrintToConsoleAll(debugMsg);
+	}
+	
+	if (flags & PRNT_CNT)
+	{
+		PrintCenterTextAll(debugMsg);
 	}
 }
